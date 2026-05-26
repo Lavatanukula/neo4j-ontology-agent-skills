@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Autonomous NL→Cypher Pipeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    padding: 32px 20px;
+    min-height: 100vh;
+  }
+  h1 { text-align: center; font-size: 1.35rem; color: #a78bfa; margin-bottom: 6px; letter-spacing: 0.05em; }
+  .subtitle { text-align: center; font-size: 0.82rem; color: #64748b; margin-bottom: 36px; }
+
+  /* ── Flow ── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  .step {
+    width: 100%;
+    border-radius: 14px;
+    border: 1.5px solid #2d2d3e;
+    background: #16192b;
+    padding: 18px 22px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+  .step:hover { border-color: #7c3aed; box-shadow: 0 0 18px #7c3aed44; }
+  .step.active { border-color: #a78bfa; box-shadow: 0 0 22px #7c3aed66; }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .badge {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem; flex-shrink: 0;
+  }
+  .step-title { font-size: 1rem; font-weight: 600; }
+  .step-tag {
+    margin-left: auto;
+    font-size: 0.7rem;
+    padding: 3px 9px;
+    border-radius: 99px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .step-detail {
+    display: none;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #2d2d3e;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: #94a3b8;
+  }
+  .step-detail.open { display: block; }
+
+  .step-detail code {
+    background: #0d1117;
+    color: #86efac;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+  }
+  .step-detail ul { padding-left: 18px; margin-top: 8px; }
+  .step-detail li { margin-bottom: 5px; }
+
+  .highlight { color: #fbbf24; font-weight: 600; }
+  .cyan { color: #67e8f9; }
+  .green { color: #86efac; }
+  .pink { color: #f9a8d4; }
+
+  /* arrow */
+  .arrow {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0; margin: 2px 0;
+  }
+  .arrow-line { width: 2px; height: 22px; background: #3f3f60; }
+  .arrow-head {
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 10px solid #3f3f60;
+  }
+
+  /* colour themes per step */
+  .s1 .badge { background: #1e1b4b; color: #a78bfa; }
+  .s1 .step-tag { background: #1e1b4b; color: #a78bfa; }
+
+  .s2 .badge { background: #0c2340; color: #38bdf8; }
+  .s2 .step-tag { background: #0c2340; color: #38bdf8; }
+
+  .s3 .badge { background: #0d2d1a; color: #4ade80; }
+  .s3 .step-tag { background: #0d2d1a; color: #4ade80; }
+
+  .s4 .badge { background: #2d1b00; color: #fbbf24; }
+  .s4 .step-tag { background: #2d1b00; color: #fbbf24; }
+
+  .s5 .badge { background: #2d0b0b; color: #f87171; }
+  .s5 .step-tag { background: #2d0b0b; color: #f87171; }
+
+  .s6 .badge { background: #1b0d2a; color: #e879f9; }
+  .s6 .step-tag { background: #1b0d2a; color: #e879f9; }
+
+  /* side-by-side detail boxes */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .box {
+    background: #0d1117;
+    border: 1px solid #2d2d3e;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+  }
+  .box-title { font-weight: 700; margin-bottom: 6px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* guardrail */
+  .guard {
+    background: #1a0a0a;
+    border: 1px dashed #ef4444;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #fca5a5;
+  }
+  .guard strong { color: #f87171; }
+
+  /* legend */
+  .legend {
+    display: flex; gap: 18px; justify-content: center;
+    flex-wrap: wrap; margin-top: 28px;
+    font-size: 0.75rem; color: #64748b;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  /* click hint */
+  .hint { text-align: center; font-size: 0.75rem; color: #475569; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+
+<h1>🔮 Autonomous NL → Cypher → Neo4j Pipeline</h1>
+<p class="subtitle">How a plain English question becomes a graph database answer</p>
+<p class="hint">Click any step to expand details</p>
+
+<div class="flow">
+
+  <!-- STEP 1 -->
+  <div class="step s1" onclick="toggle(this)">
+    <div class="step-header">
+      <div class="badge">1</div>
+      <div>
+        <div class="step-title">Business Question (Natural Language)</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">User input — plain English</div>
+      </div>
+      <div class="step-tag">INPUT</div>
+    </div>
+    <div class="step-detail">
+      The user types any business question in plain English, no SQL or Cypher needed.<br><br>
+      <span class="highlight">Examples:</span>
+      <ul>
+        <li>"What are the top 5 customers by total order value?"</li>
+        <li>"Which products have never been ordered?"</li>
+        <li>"Show suppliers connected to more than 3 products."</li>
+      </ul>
+      <br>This question flows into the pipeline as a raw string — <code>pipeline.ask(question)</code>.
+    </div>
+  </div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- STEP 2 -->
+  <div class="step s2" onclick="toggle(this)">
+    <div class="step-header">
+      <div class="badge">2</div>
+      <div>
+        <div class="step-title">AutonomousSchemaInspector — Live Blueprint</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Reads actual graph structure from Neo4j</div>
+      </div>
+      <div class="step-tag">NEO4J CALL</div>
+    </div>
+    <div class="step-detail">
+      Before any LLM is involved, the pipeline queries your <span class="cyan">live Neo4j database</span> to extract its own structure. <strong>Nothing is hardcoded.</strong>
+      <div class="two-col" style="margin-top:12px;">
+        <div class="box">
+          <div class="box-title" style="color:#38bdf8;">Path Patterns Query</div>
+          <code>MATCH (a)-[r]->(b)<br>RETURN DISTINCT labels(a)[0], type(r), labels(b)[0]</code><br><br>
+          Builds a map like:<br>
+          <code>(Customer)-[:PLACED]->(Order)</code><br>
+          <code>(Order)-[:CONTAINS]->(Product)</code>
+        </div>
+        <div class="box">
+          <div class="box-title" style="color:#38bdf8;">Live Values Query</div>
+          <code>MATCH (n:Label)<br>RETURN DISTINCT n.property LIMIT 8</code><br><br>
+          Fetches real data examples:<br>
+          <code>status=['active','refunded','pending']</code><br>
+          <code>category=['Electronics','Clothing']</code>
+        </div>
+      </div>
+      <br>
+      ✅ This output is called the <span class="highlight">"Live Blueprint"</span> — it tells the LLM <em>exactly</em> what nodes, relationships, directions, and values exist in your actual data right now. It's cached until you call <code>refresh_schema()</code>.
+    </div>
+  </div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- STEP 3 -->
+  <div class="step s3" onclick="toggle(this)">
+    <div class="step-header">
+      <div class="badge">3</div>
+      <div>
+        <div class="step-title">AutonomousCypherGenerator — Cypher Query Generation</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">LLM reads blueprint + question → writes Cypher</div>
+      </div>
+      <div class="step-tag">LLM CALL #1</div>
+    </div>
+    <div class="step-detail">
+      The <span class="green">LLM (e.g. Gemini, GPT-4o, Claude)</span> receives two things in a structured prompt:
+      <ul style="margin-top:8px;">
+        <li><strong>The Live Blueprint</strong> from Step 2 (schema + real values)</li>
+        <li><strong>The user's question</strong></li>
+      </ul>
+      <br>
+      The prompt contains <span class="highlight">6 strict laws</span> telling the LLM how to reason:
+      <div class="two-col">
+        <div class="box">
+          <div class="box-title" style="color:#4ade80;">Laws 1–3</div>
+          <strong>1.</strong> Follow relationship directions exactly<br>
+          <strong>2.</strong> Map natural language to real property values<br>
+          <strong>3.</strong> Never quote booleans; don't guess IDs
+        </div>
+        <div class="box">
+          <div class="box-title" style="color:#4ade80;">Laws 4–6</div>
+          <strong>4.</strong> Multi-hop bridge for metrics<br>
+          <strong>5.</strong> Taxonomy isolation for products vs customers<br>
+          <strong>6.</strong> Return UNSUPPORTED if path doesn't exist
+        </div>
+      </div>
+      <br>
+      Output: a raw Cypher string, e.g.<br>
+      <code>MATCH (c:Customer)-[:PLACED]->(o:Order) RETURN c.name, SUM(o.value) ORDER BY 2 DESC LIMIT 5</code>
+    </div>
+  </div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- STEP 4 -->
+  <div class="step s4" onclick="toggle(this)">
+    <div class="step-header">
+      <div class="badge">4</div>
+      <div>
+        <div class="step-title">Guardrail Gateway — Safety Intercept</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Blocks unsafe or impossible queries before execution</div>
+      </div>
+      <div class="step-tag">SAFEGUARD</div>
+    </div>
+    <div class="step-detail">
+      Before touching Neo4j, the pipeline checks whether the LLM responded with <code>UNSUPPORTED</code>.
+      <div class="guard">
+        <strong>🛡 If UNSUPPORTED detected:</strong><br>
+        Execution is stopped immediately. No database query is made.
+        A polite message is returned: <em>"The live structural blueprint does not contain a valid path to answer this question."</em>
+      </div>
+      <br>
+      This prevents malformed Cypher (or hallucinated labels/rels) from ever hitting the database.
+      <br><br>
+      ✅ If the Cypher looks valid → proceed to Step 5.
+    </div>
+  </div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- STEP 5 -->
+  <div class="step s5" onclick="toggle(this)">
+    <div class="step-header">
+      <div class="badge">5</div>
+      <div>
+        <div class="step-title">Neo4jQueryExecutor — Run Cypher on the Database</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">Executes the generated query, returns raw records</div>
+      </div>
+      <div class="step-tag">NEO4J CALL</div>
+    </div>
+    <div class="step-detail">
+      The validated Cypher is sent to your <span class="pink">Neo4j Aura instance</span> over a secure connection.
+      <br><br>
+      <strong>Special handling:</strong> Neo4j returns objects like <code>Node</code> and <code>Relationship</code>, not plain dicts.
+      The executor unwraps these automatically:
+      <br><br>
+      <code>dict(v._properties) if hasattr(v, "_properties") else v</code>
+      <br><br>
+      So the result is always a clean Python list of dicts — ready to be serialised to JSON for the LLM in Step 6.
+      <br><br>
+      If Neo4j throws an error (bad syntax, timeout, permissions), it is caught and reported as <code>[Execution Error]</code> — no crash.
+    </div>
+  </div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- STEP 6 -->
+  <div class="step s6" onclick="toggle(this)">
+    <div class="step-header">
+      <div class="badge">6</div>
+      <div>
+        <div class="step-title">AnswerSynthesizer — Natural Language Answer</div>
+        <div style="font-size:0.78rem;color:#64748b;margin-top:2px;">LLM interprets raw records → business-friendly answer</div>
+      </div>
+      <div class="step-tag">LLM CALL #2</div>
+    </div>
+    <div class="step-detail">
+      The LLM receives three things:
+      <ul style="margin-top:8px;">
+        <li>The original <strong>user question</strong></li>
+        <li>The <strong>Cypher query</strong> that ran</li>
+        <li>The <strong>raw JSON results</strong> from Neo4j</li>
+      </ul>
+      <br>
+      It synthesizes a plain English response grounded strictly in the data — no hallucination, no invented facts.
+      <br><br>
+      <span class="highlight">Example output:</span><br>
+      <em>"The top 5 customers by total order value are: Acme Corp ($142,000), TechWorld ($98,500)…"</em>
+      <br><br>
+      ✅ This is the final answer printed to the user.
+    </div>
+  </div>
+
+</div><!-- end .flow -->
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div>Neo4j Database Call</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>LLM Call</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div>Safety Guardrail</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>User I/O</div>
+</div>
+
+<!-- Summary table -->
+<div style="max-width:780px;margin:32px auto 0;background:#16192b;border:1px solid #2d2d3e;border-radius:14px;overflow:hidden;">
+  <div style="padding:14px 20px;border-bottom:1px solid #2d2d3e;font-weight:700;color:#a78bfa;font-size:0.9rem;">
+    📋 Component Summary
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+    <thead>
+      <tr style="background:#0d1117;color:#64748b;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.05em;">
+        <th style="padding:10px 16px;text-align:left;">Class / Function</th>
+        <th style="padding:10px 16px;text-align:left;">Role</th>
+        <th style="padding:10px 16px;text-align:left;">Talks To</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-top:1px solid #1e2035;">
+        <td style="padding:10px 16px;color:#67e8f9;"><code>get_llm()</code></td>
+        <td style="padding:10px 16px;">Swap any LLM provider without changing pipeline code</td>
+        <td style="padding:10px 16px;color:#94a3b8;">Gemini / OpenAI / Anthropic / Databricks</td>
+      </tr>
+      <tr style="border-top:1px solid #1e2035;background:#12142a;">
+        <td style="padding:10px 16px;color:#67e8f9;"><code>AutonomousSchemaInspector</code></td>
+        <td style="padding:10px 16px;">Zero-hardcoding live schema extraction</td>
+        <td style="padding:10px 16px;color:#94a3b8;">Neo4j (read-only)</td>
+      </tr>
+      <tr style="border-top:1px solid #1e2035;">
+        <td style="padding:10px 16px;color:#67e8f9;"><code>AutonomousCypherGenerator</code></td>
+        <td style="padding:10px 16px;">NL → Cypher with 6-law safety prompt</td>
+        <td style="padding:10px 16px;color:#94a3b8;">LLM</td>
+      </tr>
+      <tr style="border-top:1px solid #1e2035;background:#12142a;">
+        <td style="padding:10px 16px;color:#67e8f9;"><code>Neo4jQueryExecutor</code></td>
+        <td style="padding:10px 16px;">Runs Cypher, unwraps Node/Rel objects</td>
+        <td style="padding:10px 16px;color:#94a3b8;">Neo4j (read-write)</td>
+      </tr>
+      <tr style="border-top:1px solid #1e2035;">
+        <td style="padding:10px 16px;color:#67e8f9;"><code>AnswerSynthesizer</code></td>
+        <td style="padding:10px 16px;">Raw records → plain English answer</td>
+        <td style="padding:10px 16px;color:#94a3b8;">LLM</td>
+      </tr>
+      <tr style="border-top:1px solid #1e2035;background:#12142a;">
+        <td style="padding:10px 16px;color:#67e8f9;"><code>AutonomousGraphQA</code></td>
+        <td style="padding:10px 16px;">Orchestrates all steps + guardrail gate</td>
+        <td style="padding:10px 16px;color:#94a3b8;">All of the above</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  function toggle(el) {
+    const detail = el.querySelector('.step-detail');
+    const isOpen = detail.classList.contains('open');
+    // close all
+    document.querySelectorAll('.step-detail').forEach(d => d.classList.remove('open'));
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    // open clicked if it was closed
+    if (!isOpen) {
+      detail.classList.add('open');
+      el.classList.add('active');
+    }
+  }
+  // open step 1 by default
+  document.querySelector('.step').click();
+</script>
+</body>
+</html>
