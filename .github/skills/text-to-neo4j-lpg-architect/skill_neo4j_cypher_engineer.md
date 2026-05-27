@@ -47,10 +47,10 @@ Examine the **[ALLOWED GRAPH PATH PATTERNS]** block of the schema carefully.
 - A reversed or non-existent path silently returns 0 rows.
 
 ```cypher
-// ✅ Correct  — direction matches schema
+//  Correct  — direction matches schema
 MATCH (o:Order)-[:PLACED_BY]->(c:Customer)
 
-// ❌ Wrong — flipped direction
+//  Wrong — flipped direction
 MATCH (c:Customer)-[:PLACED_BY]->(o:Order)
 ```
 
@@ -67,8 +67,8 @@ Examine the **[LIVE CATEGORICAL VALUES CURRENTLY INSTANTIATED]** blocks.
 
 ```cypher
 // User asked for "returned items" → schema shows status = 'refunded'
-WHERE r.status = 'refunded'   // ✅ correct mapping
-WHERE r.status = 'returned'   // ❌ value not in graph
+WHERE r.status = 'refunded'   //  correct mapping
+WHERE r.status = 'returned'   //  value not in graph
 ```
 
 ---
@@ -80,8 +80,8 @@ Two strict sub-rules:
 1. **Booleans are never quoted.**
 
 ```cypher
-WHERE r.is_active = true     // ✅
-WHERE r.is_active = 'True'   // ❌
+WHERE r.is_active = true     // 
+WHERE r.is_active = 'True'   // 
 ```
 
 2. **Do not add string-matching restrictions on node IDs** (e.g., `id STARTS WITH 'order'`)
